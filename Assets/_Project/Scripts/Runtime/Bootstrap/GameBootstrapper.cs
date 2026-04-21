@@ -39,6 +39,7 @@ namespace TestUbisoft.Prototype.Bootstrap
         [SerializeField] private Vector2 serverToClientLatencyRange = new Vector2(0.015f, 0.04f);
         [SerializeField] private float snapshotInterpolationDelay = 0.1f;
         [SerializeField] private float eggCollectionRadius = 0.75f;
+        [SerializeField] private float botActorAvoidanceRadius = 0.65f;
         [SerializeField] private int botPathCandidateLimit = 5;
         [SerializeField] private int maxBotPathSearchesPerTick = 8;
         [SerializeField] private int maxServerTicksPerFrame = 5;
@@ -98,6 +99,7 @@ namespace TestUbisoft.Prototype.Bootstrap
                 serverToClientLatencyRange.ToSimVector2(),
                 snapshotInterpolationDelay,
                 eggCollectionRadius,
+                botActorAvoidanceRadius,
                 botPathCandidateLimit,
                 maxBotPathSearchesPerTick,
                 maxServerTicksPerFrame);

@@ -9,14 +9,21 @@ namespace TestUbisoft.Prototype.Presentation
     public sealed class PlayerView : MonoBehaviour
     {
         private const int ActorLayer = 7;
+        private const float RemoteSnapDistance = 1.5f;
 
         [SerializeField] private LayerMask localCollisionMask = ~0;
         [SerializeField, Min(0f)] private float localCollisionSkinWidth = 0.03f;
+        [SerializeField, Min(0.005f)] private float remotePositionSmoothTime = 0.045f;
+        [SerializeField, Min(90f)] private float remoteRotationSpeed = 900f;
 
         private Rigidbody body;
         private CapsuleCollider capsule;
         private bool usePhysicalCollision;
         private bool hasResolvedPhysicsComponents;
+        private bool hasTargetPose;
+        private Vector3 targetPosition;
+        private Quaternion targetRotation;
+        private Vector3 smoothVelocity;
 
         public int EntityId { get; private set; }
 
@@ -43,7 +50,53 @@ namespace TestUbisoft.Prototype.Presentation
         public void ApplySnapshot(Vector3 position, Quaternion rotation)
         {
             ResolvePhysicsComponents();
-            SetPose(position, rotation);
+            targetPosition = position;
+            targetRotation = rotation;
+
+            if (!hasTargetPose || usePhysicalCollision)
+            {
+                smoothVelocity = Vector3.zero;
+                SetPose(position, rotation);
+            }
+
+            hasTargetPose = true;
+        }
+
+        private void LateUpdate()
+        {
+            if (!hasTargetPose || usePhysicalCollision)
+            {
+                return;
+            }
+
+            float deltaTime = Time.deltaTime;
+            if (deltaTime <= 0f)
+            {
+                return;
+            }
+
+            Vector3 currentPosition = transform.position;
+            if ((targetPosition - currentPosition).sqrMagnitude >= RemoteSnapDistance * RemoteSnapDistance)
+            {
+                smoothVelocity = Vector3.zero;
+                transform.SetPositionAndRotation(targetPosition, targetRotation);
+                return;
+            }
+
+            Vector3 smoothedPosition = Vector3.SmoothDamp(
+                currentPosition,
+                targetPosition,
+                ref smoothVelocity,
+                remotePositionSmoothTime,
+                Mathf.Infinity,
+                deltaTime);
+
+            Quaternion smoothedRotation = Quaternion.RotateTowards(
+                transform.rotation,
+                targetRotation,
+                remoteRotationSpeed * deltaTime);
+
+            transform.SetPositionAndRotation(smoothedPosition, smoothedRotation);
         }
 
         private void SetPose(Vector3 position, Quaternion rotation)
@@ -54,11 +107,18 @@ namespace TestUbisoft.Prototype.Presentation
                     transform,
                     capsule,
                     position,
-                    localCollisionMask,
+                    GetEffectiveLocalCollisionMask(),
                     localCollisionSkinWidth);
             }
 
             transform.SetPositionAndRotation(position, rotation);
+        }
+
+        private LayerMask GetEffectiveLocalCollisionMask()
+        {
+            return usePhysicalCollision
+                ? localCollisionMask | (1 << ActorLayer)
+                : localCollisionMask;
         }
 
         private static void SetLayerRecursively(Transform root, int layer)
@@ -104,7 +164,7 @@ namespace TestUbisoft.Prototype.Presentation
             if (capsule != null)
             {
                 capsule.enabled = true;
-                capsule.isTrigger = !usePhysicalCollision;
+                capsule.isTrigger = false;
             }
 
             Rigidbody[] childBodies = GetComponentsInChildren<Rigidbody>();
@@ -121,7 +181,7 @@ namespace TestUbisoft.Prototype.Presentation
             for (var i = 0; i < childColliders.Length; i++)
             {
                 childColliders[i].enabled = true;
-                childColliders[i].isTrigger = childColliders[i] != capsule || !usePhysicalCollision;
+                childColliders[i].isTrigger = childColliders[i] != capsule;
             }
 
             hasResolvedPhysicsComponents = true;

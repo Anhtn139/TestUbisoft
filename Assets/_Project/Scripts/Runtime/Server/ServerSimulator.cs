@@ -287,45 +287,47 @@ namespace TestUbisoft.Prototype.Server
 
             SimVector2 step = direction * (speed * deltaSeconds);
             SimVector2 desired = actor.Position + step;
+            bool avoidActors = actor.Kind == EntityKind.Bot;
 
-            if (!IsPositionWalkable(desired))
+            if (!IsPositionWalkable(desired, actor, avoidActors))
             {
-                desired = FindAvoidancePosition(actor.Position, step);
+                desired = FindAvoidancePosition(actor, step, avoidActors);
             }
 
-            if (IsPositionWalkable(desired))
+            if (IsPositionWalkable(desired, actor, avoidActors))
             {
                 actor.Position = desired;
                 actor.YawDegrees = CalculateYawDegrees(direction);
             }
         }
 
-        private SimVector2 FindAvoidancePosition(SimVector2 current, SimVector2 step)
+        private SimVector2 FindAvoidancePosition(ActorState actor, SimVector2 step, bool avoidActors)
         {
             SimVector2 direction = step.Normalized;
             SimVector2 side = new SimVector2(-direction.Y, direction.X);
             float distance = step.Magnitude;
+            SimVector2 current = actor.Position;
 
             SimVector2 candidate = current + side * distance;
-            if (IsPositionWalkable(candidate))
+            if (IsPositionWalkable(candidate, actor, avoidActors))
             {
                 return candidate;
             }
 
             candidate = current - side * distance;
-            if (IsPositionWalkable(candidate))
+            if (IsPositionWalkable(candidate, actor, avoidActors))
             {
                 return candidate;
             }
 
             candidate = current + (direction + side).Normalized * distance;
-            if (IsPositionWalkable(candidate))
+            if (IsPositionWalkable(candidate, actor, avoidActors))
             {
                 return candidate;
             }
 
             candidate = current + (direction - side).Normalized * distance;
-            return IsPositionWalkable(candidate) ? candidate : current;
+            return IsPositionWalkable(candidate, actor, avoidActors) ? candidate : current;
         }
 
         private bool TrySelectBotTargetAndPath(ActorState bot, double serverTime)
@@ -598,7 +600,7 @@ namespace TestUbisoft.Prototype.Server
 
         private SimVector2 ClampToWalkableOrFallback(SimVector2 preferredPosition)
         {
-            if (IsPositionWalkable(preferredPosition))
+            if (IsPositionWalkable(preferredPosition, null, false))
             {
                 return preferredPosition;
             }
@@ -606,16 +608,71 @@ namespace TestUbisoft.Prototype.Server
             return GetRandomSpawnPosition(0);
         }
 
-        private bool IsPositionWalkable(SimVector2 position)
+        private bool IsPositionWalkable(SimVector2 position, ActorState movingActor, bool avoidActors)
         {
-            if (_pathfindingGrid == null || _pathfindingGrid.Map == null)
+            if (_pathfindingGrid != null && _pathfindingGrid.Map != null)
+            {
+                Vector3 world = new Vector3(position.X, 0f, position.Y);
+                if (!_pathfindingGrid.Map.TryWorldToGrid(world, out Vector2Int coordinates)
+                    || !_pathfindingGrid.Map.IsWalkable(coordinates))
+                {
+                    return false;
+                }
+            }
+
+            return !avoidActors || !IsActorBlockingPosition(position, movingActor);
+        }
+
+        private bool IsActorBlockingPosition(SimVector2 position, ActorState movingActor)
+        {
+            float avoidanceRadius = _config.BotActorAvoidanceRadius;
+            if (avoidanceRadius <= 0f)
+            {
+                return false;
+            }
+
+            float minDistanceSqr = avoidanceRadius * avoidanceRadius;
+            for (int i = 0; i < _actors.Count; i++)
+            {
+                ActorState other = _actors[i];
+                if (other == null || ReferenceEquals(other, movingActor))
+                {
+                    continue;
+                }
+
+                if (!ShouldAvoidActor(movingActor, other))
+                {
+                    continue;
+                }
+
+                if ((other.Position - position).SqrMagnitude < minDistanceSqr)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool ShouldAvoidActor(ActorState movingActor, ActorState other)
+        {
+            if (movingActor == null || other == null)
+            {
+                return false;
+            }
+
+            if (other.Kind == EntityKind.Player)
             {
                 return true;
             }
 
-            Vector3 world = new Vector3(position.X, 0f, position.Y);
-            return _pathfindingGrid.Map.TryWorldToGrid(world, out Vector2Int coordinates)
-                && _pathfindingGrid.Map.IsWalkable(coordinates);
+            if (movingActor.Kind != EntityKind.Bot || other.Kind != EntityKind.Bot)
+            {
+                return true;
+            }
+
+            // Break symmetric avoidance between bots so only one bot yields.
+            return other.EntityId < movingActor.EntityId;
         }
 
         private bool IsEggActive(int entityId)

@@ -22,6 +22,7 @@ namespace TestUbisoft.Prototype.Core
         public SimVector2 ServerToClientLatencyRange { get; }
         public float SnapshotInterpolationDelay { get; }
         public float EggCollectionRadius { get; }
+        public float BotActorAvoidanceRadius { get; }
         public int BotPathCandidateLimit { get; }
         public int MaxBotPathSearchesPerTick { get; }
         public int MaxServerTicksPerFrame { get; }
@@ -40,6 +41,7 @@ namespace TestUbisoft.Prototype.Core
             SimVector2 serverToClientLatencyRange = default,
             float snapshotInterpolationDelay = 0.1f,
             float eggCollectionRadius = 0.75f,
+            float botActorAvoidanceRadius = 0.65f,
             int botPathCandidateLimit = 5,
             int maxBotPathSearchesPerTick = 8,
             int maxServerTicksPerFrame = 5)
@@ -82,6 +84,7 @@ namespace TestUbisoft.Prototype.Core
             ServerToClientLatencyRange = NormalizeRange(serverToClientLatencyRange, 0.015f, 0.04f);
             SnapshotInterpolationDelay = Math.Max(0f, snapshotInterpolationDelay);
             EggCollectionRadius = Math.Max(0.01f, eggCollectionRadius);
+            BotActorAvoidanceRadius = Math.Max(0f, botActorAvoidanceRadius);
             BotPathCandidateLimit = Math.Max(1, botPathCandidateLimit);
             MaxBotPathSearchesPerTick = Math.Max(1, maxBotPathSearchesPerTick);
             MaxServerTicksPerFrame = Math.Max(1, maxServerTicksPerFrame);
